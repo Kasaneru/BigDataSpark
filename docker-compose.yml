@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: bigdata_postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: bd_user
+      POSTGRES_PASSWORD: bd_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./sql_scripts:/docker-entrypoint-initdb.d
+      - ./исходные данные:/mock_data
+    networks:
+      - bd-net
+
+  spark-master:
+    image: bitnamilegacy/spark:3.5
+    container_name: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      - SPARK_MODE=master
+    volumes:
+      - ./spark-apps:/home/jovyan/work
+      - ./jars:/home/jovyan/jars
+    networks:
+      - bd-net
+
+  spark-worker:
+    image: bitnamilegacy/spark:3.5
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    volumes:
+      - ./spark-apps:/home/jovyan/work
+      - ./jars:/home/jovyan/jars
+    networks:
+      - bd-net
+
+  spark-jupyter:
+    image: jupyter/all-spark-notebook:latest
+    container_name: spark-jupyter
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+    volumes:
+      - ./spark-apps:/home/jovyan/work
+      - ./jars:/home/jovyan/jars
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_DRIVER_HOST=spark-jupyter
+      - SPARK_LOCAL_IP=spark-jupyter
+    networks:
+      - bd-net
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.3
+    container_name: clickhouse
+    ports:
+      - "8123:8123" 
+      - "9000:9000"
+    networks:
+      - bd-net
+
+networks:
+  bd-net:
+    driver: bridge
